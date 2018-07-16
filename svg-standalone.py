@@ -55,12 +55,12 @@ class SVG:
 
     def get_indentation(self, element, parent, element_index):
         assert(parent[element_index] is element)
-        if element_index == 0:
-            match = re.match(r"[\r\n]([ \t]*)$", parent.text)
-            indentation = match[1] if match else ""
-        else:
-            match = re.match(r"^([ \t]*)[\r\n]", parent[element_index-1].text)
-            indentation = match[1] if match else ""
+        indentation = ""
+        text = parent.text if element_index == 0 else parent[element_index-1].tail
+        if text:
+            match = re.match(r"[\r\n]([ \t]*)$", text)
+            if match:
+                indentation = match[1]
         return indentation
 
     def add_indentation(self, element, indentation):
@@ -70,7 +70,7 @@ class SVG:
             if child.tail:
                 child.tail += indentation
 
-    def make_standalone(self):
+    def make_standalone(self, recursion_levels=0):
         for image in self.root.findall(".//svg:image[@xlink:href]", self.namespaces):
             file_path = image.get("{{{xlink}}}href".format_map(self.namespaces))
             if file_path.startswith("data:"):
@@ -84,6 +84,8 @@ class SVG:
                 indentation = self.get_indentation(image, parent, index)
                 parent.remove(image)
                 r = SVG(file_path)
+                if recursion_levels > 0:
+                    r.make_standalone(recursion_levels-1)
                 for dimension in ["x", "y", "width", "height"]:
                     r.root.set(dimension, image.get(dimension, "0"))
                 self.add_indentation(r.root, indentation)
@@ -99,5 +101,5 @@ class SVG:
 
 for file in args.svg:
     s = SVG(file)
-    s.make_standalone()
+    s.make_standalone(args.recursion_levels)
     s.write_to_file(sys.stdout.buffer)
